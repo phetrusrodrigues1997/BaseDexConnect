@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import TokenSwap from "@/components/TokenSwap";
 import WalletConnect from "@/components/WalletConnect";
 import NetworkStatus from "@/components/NetworkStatus";
+import TokenBalance from "@/components/TokenBalance";
 import { useWeb3Store } from "@/lib/web3";
 
 export default function Home() {
@@ -19,6 +20,12 @@ export default function Home() {
             <WalletConnect />
           </div>
         </div>
+
+        {address && (
+          <div className="max-w-lg mx-auto mb-6">
+            <TokenBalance />
+          </div>
+        )}
 
         <Card className="max-w-lg mx-auto p-6">
           <TokenSwap />
