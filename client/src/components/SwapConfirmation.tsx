@@ -25,9 +25,16 @@ const ERC20_ABI = [
 ];
 
 const ROUTER_ABI = [
-  "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)",
-  "function exactOutputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountIn)",
+  "function exactInput(tuple(bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum)) external payable returns (uint256 amountOut)",
+  "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)",
+  "function WETH9() external view returns (address)",
 ];
+
+const QUOTER_ABI = [
+  "function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)",
+];
+
+const QUOTER_ADDRESS = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 
 interface SwapConfirmationProps {
   open: boolean;
@@ -58,27 +65,49 @@ export default function SwapConfirmation({
       const { fromToken, toToken, fromAmount, slippage } = formData;
       const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes from now
 
+      const routerContract = new ethers.Contract(
+        UNISWAP_ROUTER,
+        ROUTER_ABI,
+        signer
+      );
+
+      // Get WETH address
+      const WETH = await routerContract.WETH9();
+
       if (fromToken === "ETH" && toToken === "USDC") {
         // ETH to USDC swap
         if (Number(fromAmount) < 0.0001) {
           throw new Error("Minimum amount is 0.0001 ETH");
         }
 
-        const routerContract = new ethers.Contract(
-          UNISWAP_ROUTER,
-          ROUTER_ABI,
-          signer
+        const ethAmount = ethers.parseEther(fromAmount);
+
+        // Get quote first
+        const quoterContract = new ethers.Contract(
+          QUOTER_ADDRESS,
+          QUOTER_ABI,
+          provider
         );
 
-        const ethAmount = ethers.parseEther(fromAmount);
+        const quote = await quoterContract.quoteExactInputSingle(
+          WETH,
+          USDC_ADDRESS,
+          500,
+          ethAmount,
+          0
+        );
+
+        // Calculate minimum amount out with slippage
+        const minAmountOut = quote - (quote * Number(slippage)) / 100;
+
         const params = {
-          tokenIn: "0x4200000000000000000000000000000000000006", // WETH on Base
+          tokenIn: WETH,
           tokenOut: USDC_ADDRESS,
           fee: 500, // 0.05%
           recipient: await signer.getAddress(),
           deadline,
           amountIn: ethAmount,
-          amountOutMinimum: 0, // Add slippage calculation here
+          amountOutMinimum: minAmountOut,
           sqrtPriceLimitX96: 0,
         };
 
@@ -97,24 +126,36 @@ export default function SwapConfirmation({
         const decimals = await usdcContract.decimals();
         const usdcAmount = ethers.parseUnits(fromAmount, decimals);
 
+        // Get quote first
+        const quoterContract = new ethers.Contract(
+          QUOTER_ADDRESS,
+          QUOTER_ABI,
+          provider
+        );
+
+        const quote = await quoterContract.quoteExactInputSingle(
+          USDC_ADDRESS,
+          WETH,
+          500,
+          usdcAmount,
+          0
+        );
+
+        // Calculate minimum amount out with slippage
+        const minAmountOut = quote - (quote * Number(slippage)) / 100;
+
         // Approve USDC spending
         const approveTx = await usdcContract.approve(UNISWAP_ROUTER, usdcAmount);
         await approveTx.wait();
 
-        const routerContract = new ethers.Contract(
-          UNISWAP_ROUTER,
-          ROUTER_ABI,
-          signer
-        );
-
         const params = {
           tokenIn: USDC_ADDRESS,
-          tokenOut: "0x4200000000000000000000000000000000000006", // WETH on Base
-          fee: 500, // 0.05%
+          tokenOut: WETH,
+          fee: 500,
           recipient: await signer.getAddress(),
           deadline,
           amountIn: usdcAmount,
-          amountOutMinimum: 0, // Add slippage calculation here
+          amountOutMinimum: minAmountOut,
           sqrtPriceLimitX96: 0,
         };
 
