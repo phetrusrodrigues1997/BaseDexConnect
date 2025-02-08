@@ -3,6 +3,7 @@ import TokenSwap from "@/components/TokenSwap";
 import WalletConnect from "@/components/WalletConnect";
 import NetworkStatus from "@/components/NetworkStatus";
 import TokenBalance from "@/components/TokenBalance";
+import ChatAssistant from "@/components/ChatAssistant";
 import { useWeb3Store } from "@/lib/web3";
 
 export default function Home() {
@@ -27,9 +28,12 @@ export default function Home() {
           </div>
         )}
 
-        <Card className="max-w-lg mx-auto p-6">
-          <TokenSwap />
-        </Card>
+        <div className="max-w-lg mx-auto">
+          <ChatAssistant />
+          <Card className="p-6">
+            <TokenSwap />
+          </Card>
+        </div>
       </div>
     </div>
   );
