@@ -54,11 +54,19 @@ export default function SwapConfirmation({
         const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
         const decimals = await usdcContract.decimals();
 
-        // Convert 1 ETH to USDC (assuming 1 ETH ≈ 2500 USDC)
-        const ethAmount = ethers.parseEther(fromAmount);
-        const usdcAmount = ethers.parseUnits((Number(fromAmount) * 2500).toString(), decimals);
+        // Minimum amount check (0.0001 ETH)
+        if (Number(fromAmount) < 0.0001) {
+          throw new Error("Minimum amount is 0.0001 ETH");
+        }
 
-        // Send ETH to USDC contract and receive USDC
+        // Convert ETH to USDC (assuming 1 ETH ≈ 2500 USDC)
+        const ethAmount = ethers.parseEther(fromAmount);
+        const usdcAmount = ethers.parseUnits(
+          (Number(fromAmount) * 2500).toFixed(6),
+          decimals
+        );
+
+        // Send ETH to USDC contract
         const tx = await signer.sendTransaction({
           to: USDC_ADDRESS,
           value: ethAmount,
@@ -68,12 +76,22 @@ export default function SwapConfirmation({
 
         toast({
           title: "Swap successful!",
-          description: `Swapped ${fromAmount} ETH for ${ethers.formatUnits(usdcAmount, decimals)} USDC`,
+          description: `Swapped ${fromAmount} ETH for ${ethers.formatUnits(
+            usdcAmount,
+            decimals
+          )} USDC`,
         });
       } else if (fromToken === "USDC" && toToken === "ETH") {
         // USDC to ETH swap
         const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
         const decimals = await usdcContract.decimals();
+
+        // Minimum amount check (0.01 USDC)
+        if (Number(fromAmount) < 0.01) {
+          throw new Error("Minimum amount is 0.01 USDC");
+        }
+
+        // Format USDC amount with proper decimals
         const usdcAmount = ethers.parseUnits(fromAmount, decimals);
 
         // Approve USDC transfer
@@ -85,11 +103,16 @@ export default function SwapConfirmation({
         await transferTx.wait();
 
         // Calculate ETH amount (assuming 1 ETH ≈ 2500 USDC)
-        const ethAmount = ethers.parseEther((Number(fromAmount) / 2500).toString());
+        const ethAmount = ethers.parseUnits(
+          (Number(fromAmount) / 2500).toFixed(18),
+          18
+        );
 
         toast({
           title: "Swap successful!",
-          description: `Swapped ${fromAmount} USDC for ${ethers.formatEther(ethAmount)} ETH`,
+          description: `Swapped ${fromAmount} USDC for ${ethers.formatEther(
+            ethAmount
+          )} ETH`,
         });
       }
 
