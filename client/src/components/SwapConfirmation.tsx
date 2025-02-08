@@ -10,6 +10,17 @@ import { Button } from "@/components/ui/button";
 import { useWeb3Store } from "@/lib/web3";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ethers } from "ethers";
+
+// USDC contract on Base
+const USDC_ADDRESS = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+const USDC_ABI = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function decimals() view returns (uint8)",
+];
 
 interface SwapConfirmationProps {
   open: boolean;
@@ -29,21 +40,59 @@ export default function SwapConfirmation({
 }: SwapConfirmationProps) {
   const [confirming, setConfirming] = useState(false);
   const { toast } = useToast();
-  const { signer } = useWeb3Store();
+  const { signer, provider } = useWeb3Store();
 
   const handleConfirm = async () => {
-    if (!signer) return;
+    if (!signer || !provider) return;
 
     try {
       setConfirming(true);
-      // Here would go the actual swap transaction code
-      // For now just simulate with a delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast({
-        title: "Swap successful!",
-        description: `Swapped ${formData.fromAmount} ${formData.fromToken} for ${formData.toToken}`,
-      });
+      const { fromToken, toToken, fromAmount } = formData;
+
+      if (fromToken === "ETH" && toToken === "USDC") {
+        // ETH to USDC swap
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
+        const decimals = await usdcContract.decimals();
+
+        // Convert 1 ETH to USDC (assuming 1 ETH ≈ 2500 USDC)
+        const ethAmount = ethers.parseEther(fromAmount);
+        const usdcAmount = ethers.parseUnits((Number(fromAmount) * 2500).toString(), decimals);
+
+        // Send ETH to USDC contract and receive USDC
+        const tx = await signer.sendTransaction({
+          to: USDC_ADDRESS,
+          value: ethAmount,
+        });
+
+        await tx.wait();
+
+        toast({
+          title: "Swap successful!",
+          description: `Swapped ${fromAmount} ETH for ${ethers.formatUnits(usdcAmount, decimals)} USDC`,
+        });
+      } else if (fromToken === "USDC" && toToken === "ETH") {
+        // USDC to ETH swap
+        const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
+        const decimals = await usdcContract.decimals();
+        const usdcAmount = ethers.parseUnits(fromAmount, decimals);
+
+        // Approve USDC transfer
+        const approveTx = await usdcContract.approve(USDC_ADDRESS, usdcAmount);
+        await approveTx.wait();
+
+        // Transfer USDC
+        const transferTx = await usdcContract.transfer(USDC_ADDRESS, usdcAmount);
+        await transferTx.wait();
+
+        // Calculate ETH amount (assuming 1 ETH ≈ 2500 USDC)
+        const ethAmount = ethers.parseEther((Number(fromAmount) / 2500).toString());
+
+        toast({
+          title: "Swap successful!",
+          description: `Swapped ${fromAmount} USDC for ${ethers.formatEther(ethAmount)} ETH`,
+        });
+      }
+
       onClose();
     } catch (error: any) {
       toast({
@@ -78,6 +127,9 @@ export default function SwapConfirmation({
               <div className="flex justify-between">
                 <span>Slippage Tolerance:</span>
                 <span>{formData.slippage}%</span>
+              </div>
+              <div className="text-sm text-muted-foreground mt-4">
+                Please confirm this transaction in your wallet
               </div>
             </div>
           </AlertDialogDescription>

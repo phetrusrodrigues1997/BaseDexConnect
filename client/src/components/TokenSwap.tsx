@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,9 +6,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowDownIcon, RefreshCwIcon } from "lucide-react";
+import { ArrowDownIcon } from "lucide-react";
 import SwapConfirmation from "./SwapConfirmation";
 import { useWeb3Store } from "@/lib/web3";
+import { ethers } from "ethers";
 
 const swapSchema = z.object({
   fromToken: z.string(),
@@ -20,13 +21,16 @@ const swapSchema = z.object({
 const TOKENS = [
   { symbol: "ETH", name: "Ethereum" },
   { symbol: "USDC", name: "USD Coin" },
-  { symbol: "WETH", name: "Wrapped Ethereum" },
 ];
+
+// Current ETH price in USDC
+const ETH_PRICE = 2500;
 
 export default function TokenSwap() {
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const { address, chainId } = useWeb3Store();
-  
+  const [estimatedOutput, setEstimatedOutput] = useState<string>("0.0");
+  const { address, provider } = useWeb3Store();
+
   const form = useForm<z.infer<typeof swapSchema>>({
     resolver: zodResolver(swapSchema),
     defaultValues: {
@@ -36,6 +40,27 @@ export default function TokenSwap() {
       slippage: "0.5",
     },
   });
+
+  useEffect(() => {
+    const calculateEstimatedOutput = () => {
+      const amount = form.watch("fromAmount");
+      const fromToken = form.watch("fromToken");
+      const toToken = form.watch("toToken");
+
+      if (!amount || isNaN(Number(amount))) {
+        setEstimatedOutput("0.0");
+        return;
+      }
+
+      if (fromToken === "ETH" && toToken === "USDC") {
+        setEstimatedOutput((Number(amount) * ETH_PRICE).toFixed(2));
+      } else if (fromToken === "USDC" && toToken === "ETH") {
+        setEstimatedOutput((Number(amount) / ETH_PRICE).toFixed(6));
+      }
+    };
+
+    calculateEstimatedOutput();
+  }, [form.watch("fromAmount"), form.watch("fromToken"), form.watch("toToken")]);
 
   const onSubmit = async (values: z.infer<typeof swapSchema>) => {
     if (!address) return;
@@ -55,7 +80,10 @@ export default function TokenSwap() {
                 <div className="flex gap-2">
                   <Select
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("toToken", value === "ETH" ? "USDC" : "ETH");
+                    }}
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue />
@@ -91,6 +119,8 @@ export default function TokenSwap() {
                 const to = form.getValues("toToken");
                 form.setValue("fromToken", to);
                 form.setValue("toToken", from);
+                form.setValue("fromAmount", "");
+                setEstimatedOutput("0.0");
               }}
             >
               <ArrowDownIcon className="h-4 w-4" />
@@ -102,11 +132,14 @@ export default function TokenSwap() {
             name="toToken"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>To</FormLabel>
+                <FormLabel>To (estimated)</FormLabel>
                 <div className="flex gap-2">
                   <Select
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("fromToken", value === "ETH" ? "USDC" : "ETH");
+                    }}
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue />
@@ -119,7 +152,7 @@ export default function TokenSwap() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input disabled value="0.0" />
+                  <Input disabled value={estimatedOutput} />
                 </div>
               </FormItem>
             )}
