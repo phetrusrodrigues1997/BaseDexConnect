@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { useWeb3Store } from "@/lib/web3";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { ethers } from "ethers";
 
 // USDC contract on Base
@@ -33,6 +32,7 @@ const ROUTER_ABI = [
 interface SwapConfirmationProps {
   open: boolean;
   onClose: () => void;
+  onError: (error: Error) => void;
   formData: {
     fromToken: string;
     toToken: string;
@@ -44,10 +44,10 @@ interface SwapConfirmationProps {
 export default function SwapConfirmation({
   open,
   onClose,
+  onError,
   formData,
 }: SwapConfirmationProps) {
   const [confirming, setConfirming] = useState(false);
-  const { toast } = useToast();
   const { signer, provider } = useWeb3Store();
 
   const handleConfirm = async () => {
@@ -86,11 +86,7 @@ export default function SwapConfirmation({
           value: ethAmount,
         });
         await tx.wait();
-
-        toast({
-          title: "Swap successful!",
-          description: `Swapped ${fromAmount} ETH for USDC`,
-        });
+        onClose();
       } else if (fromToken === "USDC" && toToken === "ETH") {
         // USDC to ETH swap
         if (Number(fromAmount) < 0.01) {
@@ -124,21 +120,11 @@ export default function SwapConfirmation({
 
         const tx = await routerContract.exactInputSingle(params);
         await tx.wait();
-
-        toast({
-          title: "Swap successful!",
-          description: `Swapped ${fromAmount} USDC for ETH`,
-        });
+        onClose();
       }
-
-      onClose();
     } catch (error: any) {
       console.error("Swap error:", error);
-      toast({
-        variant: "destructive",
-        title: "Swap failed",
-        description: error.message || "Transaction failed. Please try again.",
-      });
+      onError(error);
     } finally {
       setConfirming(false);
     }

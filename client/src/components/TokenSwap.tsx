@@ -29,6 +29,7 @@ const ETH_PRICE = 2500;
 export default function TokenSwap() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [estimatedOutput, setEstimatedOutput] = useState<string>("0.0");
+  const [error, setError] = useState<string>("");
   const { address, provider } = useWeb3Store();
 
   const form = useForm<z.infer<typeof swapSchema>>({
@@ -64,7 +65,13 @@ export default function TokenSwap() {
 
   const onSubmit = async (values: z.infer<typeof swapSchema>) => {
     if (!address) return;
+    setError("");
     setShowConfirmation(true);
+  };
+
+  const handleSwapError = (error: Error) => {
+    setError(error.message);
+    setShowConfirmation(false);
   };
 
   return (
@@ -165,12 +172,21 @@ export default function TokenSwap() {
           >
             {address ? "Swap" : "Connect Wallet to Swap"}
           </Button>
+
+          {error && (
+            <div className="mt-4 p-4 bg-destructive/10 border border-destructive rounded-lg">
+              <pre className="whitespace-pre-wrap text-sm text-destructive font-mono">
+                {error}
+              </pre>
+            </div>
+          )}
         </form>
       </Form>
 
       <SwapConfirmation 
         open={showConfirmation}
         onClose={() => setShowConfirmation(false)}
+        onError={handleSwapError}
         formData={form.getValues()}
       />
     </div>
